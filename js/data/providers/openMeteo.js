@@ -1,4 +1,4 @@
-// Provedor AO VIVO: Open-Meteo (gratuito, sem chave, CC BY 4.0).
+// Coletor usado SOMENTE pelo script Node/GitHub Actions, nunca pelo navegador.
 // https://open-meteo.com/en/docs
 import { CONFIG } from '../../config.js';
 
@@ -29,7 +29,7 @@ async function fetchJson(url, timeoutMs = 15000) {
   }
 }
 
-function toReading(loc, cur) {
+export function toReading(loc, cur) {
   return {
     ...loc,
     time: cur.time,
@@ -37,10 +37,12 @@ function toReading(loc, cur) {
     rh: cur.relative_humidity_2m,
     precip: cur.precipitation,
     cloud: cur.cloud_cover,
-    windSpeed: (cur.wind_speed_10m ?? 0) / 3.6, // km/h → m/s
-    windDir: cur.wind_direction_10m ?? 0,
+    windSpeed: cur.wind_speed_10m / 3.6, // km/h → m/s
+    windDir: cur.wind_direction_10m,
+    windGust: cur.wind_gusts_10m / 3.6,
+    pressure: cur.pressure_msl,
+    feelsLike: cur.apparent_temperature,
     code: cur.weather_code,
-    isDay: cur.is_day,
   };
 }
 
@@ -58,9 +60,14 @@ export async function fetchCurrent(locations, { onProgress } = {}) {
       longitude: batch.map((p) => p.lon.toFixed(2)).join(','),
       current: CONFIG.api.variables.join(','),
       timezone: 'GMT',
+      wind_speed_unit: 'kmh',
+      temperature_unit: 'celsius',
+      precipitation_unit: 'mm',
+      forecast_days: '1',
     });
     const json = await fetchJson(`${CONFIG.api.forecast}?${params}`);
     const list = Array.isArray(json) ? json : [json];
+    if (list.length !== batch.length) throw new Error('Resposta incompleta do Open-Meteo');
     batch.forEach((loc, i) => {
       const cur = list[i]?.current;
       out.push(cur && cur.temperature_2m != null ? toReading(loc, cur) : null);
@@ -80,7 +87,7 @@ export const openMeteoProvider = {
     const all = [...grid, ...cities];
     const readings = await fetchCurrent(all, { onProgress });
     const points = readings.filter(Boolean);
-    if (points.length < grid.length * 0.5) throw new Error('Poucos pontos retornados pela API');
+    if (points.length !== all.length) throw new Error('Coleta incompleta; o último arquivo válido será preservado');
     const cityReadings = readings.slice(grid.length);
     const times = points.map((p) => Date.parse(p.time + 'Z')).filter(Number.isFinite);
     return {

@@ -2,20 +2,11 @@
 
 ## Fluxo de dados
 
-```
-Open-Meteo (lotes de 100 coords) ─┐
-                                  ├─► weatherService ─► Campo (grade 2°) ─► camadas ─► globo
-Demonstração (sintético) ─────────┘        │                 │
-                                     cache local      fieldStats / sampleAll
-                                     (25 min)                │
-                                                       painel (estatísticas, leitura do ponto)
-```
-
-1. **Coleta** — `data/providers/openMeteo.js` monta uma grade (10° lat × 15° lon, de −80° a 80°) mais as cidades de `data/cities.json` e consulta o endpoint `current` em lotes.
-2. **Normalização** — cada resposta vira uma leitura `{lat, lon, temp, rh, precip, cloud, windSpeed (m/s), windDir}`.
-3. **Campo** — `data/field.js` interpola as leituras por IDW numa grade regular de 2° (180 × 90). Vento é interpolado como componentes `u`/`v`, nunca como ângulo.
-4. **Camadas** — cada camada em `layers/` recebe o campo com `setField(field)` e se redesenha.
-5. **Interface** — `ui/` lê o estado (`core/state.js`) e mostra controles, legenda, estatísticas e o cartão do ponto tocado.
+1. **Coleta no GitHub** — `scripts/update-weather.mjs` usa `js/data/providers/openMeteo.js` para consultar 132 coordenadas globais mais as 50 cidades. Somente essa tarefa acessa a API externa.
+2. **Snapshot** — todas as respostas precisam estar completas. A validação em `providers/snapshot.js` verifica versão, datas, coordenadas e campos numéricos antes da substituição atômica de `data/latest.json`.
+3. **Publicação** — o workflow agendado faz commit do JSON e chama o workflow reutilizável do Pages com esse SHA; commits do `GITHUB_TOKEN` não disparam outro push workflow. Quando o Pages ainda não está habilitado, a coleta segue e a publicação é pulada com aviso.
+4. **Navegador** — `snapshotProvider` lê somente `data/latest.json` com `cache: no-store`; `weatherService` reutiliza o campo em memória quando `generatedAt` não mudou. Não há cache persistente por visitante.
+5. **Campo e interface** — IDW interpola temperatura, umidade, precipitação, nuvens, rajadas, pressão e sensação térmica numa grade de 2°. O vento é interpolado em componentes u/v. As cidades conservam suas leituras próprias, e o cartão mostra os novos campos.
 
 O provedor de demonstração pula as etapas 1–3 e entrega o campo pronto.
 
@@ -23,7 +14,7 @@ O provedor de demonstração pula as etapas 1–3 e entrega o campo pronto.
 
 - **Coordenadas**: `core/geo.js#latLonToXYZ` segue o UV da `SphereGeometry` do Three.js (u = 0 em −180°). Use sempre essa função para posicionar algo no globo.
 - **Campo**: linha 0 = norte, coluna 0 = −180°. Use `sample(field, key, lat, lon)` (bilinear, longitude cíclica).
-- **Unidades internas**: °C, %, mm/h, m/s. Conversões (km/h, rumo) só na interface.
+- **Unidades internas**: °C, %, mm por intervalo current, m/s e hPa. Conversões (km/h, rumo) só na interface.
 - **Sem build**: módulos ES nativos; Three.js como script global (`window.THREE`).
 
 ## Como adicionar uma camada
@@ -43,9 +34,14 @@ Um provedor é um objeto `{ id, label, attribution, load({ cities, onProgress })
 
 Registre-o em `data/weatherService.js`.
 
-## Escalando para muitos usuários
+## Coleta, limites e falhas
 
-Se o app ficar popular, não deixe cada visitante consultar a API. Mova a coleta para uma tarefa agendada (GitHub Actions com `schedule`, Cloudflare Worker com cron ou similar) que gera `data/latest.json` a cada 30 min, e crie um provedor que só lê esse arquivo. O resto do app não muda.
+- Cron: `7,37 * * * *`, UTC. O GitHub pode atrasar execuções.
+- 182 locais × 48 coletas = 8.736 locais/dia; 10 variáveis. O script bloqueia acima de 9.000 locais/dia. Execuções manuais e outros consumidores compartilham a margem de uso.
+- Uma falha de HTTP, resposta parcial ou campo obrigatório ausente impede a escrita. Não há substituição por dados sintéticos no JSON real.
+- JSON válido preservado em caso de falha; o navegador mostra a idade e sinaliza dados com mais de 90 minutos ou erro de recarga.
+- Sem dados iniciais: modo automático usa demonstração claramente identificada; modo compartilhado mostra erro. Demonstração não estima os novos campos e apresenta “—”.
+- Para aumentar a densidade da grade, revise a frequência/cota contratada e o limite conservador no script; não basta aumentar o tamanho dos lotes.
 
 ## Ideias de evolução
 

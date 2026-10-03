@@ -1,0 +1,62 @@
+name: Atualizar dados meteorológicos
+
+on:
+  schedule:
+    # UTC: evita o pico do início da hora. Execuções podem sofrer atraso no GitHub.
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/update-weather.yml'
+      - 'scripts/update-weather.mjs'
+      - 'js/config.js'
+      - 'js/data/providers/openMeteo.js'
+      - 'js/data/providers/snapshot.js'
+      - 'data/cities.json'
+
+concurrency:
+  group: weather-update
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      commit_sha: ${{ steps.save.outputs.commit_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - run: npm run update-weather
+      - name: Salvar o snapshot validado
+        id: save
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/latest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Atualiza condições meteorológicas compartilhadas"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  # Push com GITHUB_TOKEN não dispara outro workflow. Publica a revisão salva.
+  publish:
+    needs: collect
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml
+    with:
+      source_ref: ${{ needs.collect.outputs.commit_sha }}

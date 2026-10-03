@@ -24,7 +24,7 @@ export function renderReadout(el, { lat, lon, values, city, source }) {
   const r = city?.reading;
   const useCity = Boolean(r);
   const v = useCity
-    ? { temp: r.temp, rh: r.rh, precip: r.precip, cloud: r.cloud, windSpeed: r.windSpeed, windDir: r.windDir, code: r.code }
+    ? r
     : (() => {
       const w = uvToWind(values.u, values.v);
       return { ...values, windSpeed: w.speed, windDir: w.dir, code: estimateCode(values) };
@@ -49,6 +49,9 @@ export function renderReadout(el, { lat, lon, values, city, source }) {
       <div><dt>Umidade</dt><dd>${fmt.pct(v.rh)}</dd></div>
       <div><dt>Nuvens</dt><dd>${fmt.pct(v.cloud)}</dd></div>
       <div><dt>Chuva</dt><dd>${fmt.mm(v.precip)}</dd></div>
+      <div><dt>Rajadas</dt><dd>${Number.isFinite(v.windGust) ? fmt.wind(v.windGust) : '—'}</dd></div>
+      <div><dt>Pressão ao nível do mar</dt><dd>${Number.isFinite(v.pressure) ? `${Math.round(v.pressure)} hPa` : '—'}</dd></div>
+      <div><dt>Sensação térmica</dt><dd>${Number.isFinite(v.feelsLike) ? `${fmt.temp(v.feelsLike)}C` : '—'}</dd></div>
     </dl>
     <p class="readout-src">${origin}.</p>`;
   el.querySelector('.readout-place').textContent = place;

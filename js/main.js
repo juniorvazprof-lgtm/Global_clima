@@ -101,11 +101,11 @@ async function boot() {
     renderStats(fieldStats(res.field));
     const live = res.source.id === 'live';
     const note = live
-      ? `${res.source.attribution}. Campo interpolado entre uma grade global de pontos e ${res.cities.length} cidades; observação das ${timeLabel(res.observedAt)}. Atualiza a cada ${CONFIG.refreshMs / 60000} min.`
+      ? `${res.source.attribution}. Campo interpolado entre uma grade global de pontos e ${res.cities.length} cidades; observação de ${res.observedAt.toLocaleString('pt-BR')}. Coleta compartilhada agendada a cada 30 min.${res.stale ? ' <strong>Dados desatualizados:</strong> exibindo a última coleta disponível.' : ''}${res.fallbackReason ? ` ${res.fallbackReason}` : ''}`
       : `<strong>Demonstração:</strong> campo sintético gerado no navegador a partir de insolação, estação e circulação geral, para as ${timeLabel(res.observedAt)} de agora. Não são observações.${res.fallbackReason ? ` Motivo: ${res.fallbackReason}` : ''}`;
     renderStatus({
       state: live ? 'live' : 'demo',
-      text: live ? `Ao vivo · ${timeLabel(res.observedAt)}` : `Demonstração · ${timeLabel(res.observedAt)}`,
+      text: live ? `${res.stale ? 'Última coleta' : 'Dados compartilhados'} · ${timeLabel(res.observedAt)}` : `Demonstração · ${timeLabel(res.observedAt)}`,
       note,
     });
     showSelection();

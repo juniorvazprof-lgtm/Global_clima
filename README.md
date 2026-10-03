@@ -7,7 +7,8 @@ Globo terrestre 3D no navegador com as condições meteorológicas **atuais** do
 - **Nuvens** em camada própria
 - **Dia e noite** com a posição real do Sol (terminador)
 - **Toque em qualquer ponto** para ler temperatura, vento, umidade, nuvens e chuva; perto de uma cidade, mostra a leitura dela
-- Atualização automática a cada 30 min, com cache local
+- Rajadas de vento, pressão ao nível do mar e sensação térmica no cartão do ponto
+- Coleta compartilhada agendada a cada 30 min: os visitantes leem somente `data/latest.json`, sem chamadas ao Open-Meteo
 
 ## Fontes de dados
 
@@ -21,11 +22,11 @@ Globo terrestre 3D no navegador com as condições meteorológicas **atuais** do
 
 | Modo | O que faz |
 |---|---|
-| **Automático** (padrão) | Tenta o Open-Meteo; se a rede ou a política de segurança da página bloquear, cai para Demonstração e avisa o motivo. |
-| **Ao vivo** | Só Open-Meteo. Mostra erro se não conseguir. |
+| **Automático** (padrão) | Lê `data/latest.json`; se o arquivo não estiver disponível e não houver uma coleta já carregada, usa Demonstração e avisa o motivo. |
+| **Ao vivo** | Somente o arquivo compartilhado do Open-Meteo. Preserva a última coleta carregada quando a rede falha, com aviso; se não houver dados, mostra erro. |
 | **Demonstração** | Campo sintético calculado no navegador (insolação por latitude, estação, ciclo diurno, continentalidade, ZCIT, trilhas de tempestade, alísios e ventos de oeste). Não são observações; serve para uso offline e como material didático. |
 
-> Na pré-visualização do Claude (artifact), chamadas a sites externos são bloqueadas, então o app roda em Demonstração. Publicado no GitHub Pages ou servido localmente, ele usa os dados ao vivo.
+> Demonstração é um modo didático explícito, sem observações reais. Os três novos campos aparecem como “—” nesse modo, sem valores inventados.
 
 ## Rodar localmente
 
@@ -43,17 +44,33 @@ Testes (Node 18+):
 npm test
 ```
 
-## Publicar no GitHub Pages
+## Coleta automática e publicação
 
-1. Crie o repositório e envie os arquivos:
-   ```bash
-   git init && git add . && git commit -m "Globo do Clima: primeira versão"
-   git branch -M main
-   git remote add origin https://github.com/SEU-USUARIO/clima-globo-3d.git
-   git push -u origin main
-   ```
-2. No GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. O workflow `.github/workflows/pages.yml` roda os testes e publica a cada push na `main`.
+O workflow [Atualizar dados meteorológicos](.github/workflows/update-weather.yml) roda em `main` nos minutos **07 e 37 de cada hora (UTC)**. Também pode ser executado por **Actions → Atualizar dados meteorológicos → Run workflow**; mudanças no coletor disparam uma coleta inicial.
+
+1. Executa os testes e consulta o Open-Meteo em 3 lotes de até 64 coordenadas.
+2. Valida todos os pontos e grava `data/latest.json` de forma atômica. Se qualquer lote ou campo falhar, a execução falha e o arquivo anterior é preservado.
+3. Faz commit exclusivamente do JSON usando `GITHUB_TOKEN` com `contents: write`. Não exige chave de API ou token pessoal; regras de proteção da branch precisam permitir o bot.
+4. Chama o workflow reutilizável do Pages com o SHA exato da revisão salva. Isso é necessário porque o push de `GITHUB_TOKEN` não dispara outro workflow de push.
+
+Para publicar o app, configure **Settings → Pages → Build and deployment → Source: GitHub Actions**. Se o Pages ainda não estiver habilitado, a publicação é pulada com um aviso; a coleta e os commits continuam funcionando.
+
+O agendamento é de 30 min, mas o GitHub pode atrasar execuções. O app informa a data da observação e sinaliza coleta antiga após 90 min. Cada atualização do navegador busca o JSON novamente, sem cache local persistente.
+
+### Gerar o arquivo localmente
+
+```bash
+npm run update-weather
+npm start
+```
+
+### Orçamento da API
+
+A grade de **15° de latitude × 30° de longitude**, de −75° a 75°, tem 132 pontos; somada às 50 cidades, são **182 locais por coleta**. O orçamento conservador é **8.736 consultas de locais/dia** (48 coletas), com 10 variáveis, abaixo de 10.000/dia no plano gratuito. Lotes não são tratados como desconto por coordenada. Execuções manuais, novas cidades e outras aplicações usando a mesma cota consomem margem adicional; o script bloqueia configurações que superam 9.000 locais/dia ou 10 variáveis.
+
+A grade é mais esparsa que a original para caber nesse orçamento; a interpolação continua em 2°, e as 50 cidades têm leituras próprias. O arquivo contém `schemaVersion`, `generatedAt`, `observedAt`, unidades, pontos e cidades; vento e rajadas usam m/s, pressão usa hPa e temperaturas usam °C.
+
+Referências: [Open-Meteo](https://open-meteo.com/en/docs), [cotas](https://open-meteo.com/en/pricing), [GITHUB_TOKEN](https://docs.github.com/en/actions/concepts/security/github_token), [agendamento](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
 
 ## Estrutura
 
@@ -61,12 +78,14 @@ npm test
 index.html              página e marcação do painel
 css/style.css           visual (tokens no topo)
 data/cities.json        cidades de referência (nome, lat, lon)
+data/latest.json        condições reais compartilhadas, geradas pelo Action
+scripts/update-weather.mjs coleta e valida o snapshot
 js/
   main.js               ponto de entrada: liga cena, camadas, dados e interface
   config.js             parâmetros (grade, lotes, atualização, escalas)
   core/                 utilitários puros: eventos, estado, geografia
   data/                 provedores, interpolação, máscara de terra, ruído, códigos OMM
-    providers/          openMeteo.js (ao vivo) e demo.js (sintético)
+    providers/          snapshot.js (navegador), openMeteo.js (coletor), demo.js (sintético)
   globe/                cena Three.js, Terra, seleção por toque
   layers/               camadas visuais: escalar, nuvens, vento, cidades, escalas de cor
   ui/                   painel: controles, legenda, leitura do ponto
@@ -78,8 +97,8 @@ Detalhes do fluxo e de como adicionar camadas ou provedores: [docs/ARQUITETURA.m
 
 ## Limites conhecidos
 
-- O campo ao vivo é interpolado (IDW) entre ~400 pontos de grade (10° × 15°) e 50 cidades; serve para visão global, não para previsão local fina.
-- O Open-Meteo é gratuito para uso não comercial dentro de limites razoáveis. Para muitos acessos simultâneos, mova a coleta para uma função agendada (ver ARQUITETURA.md) e sirva um JSON único.
+- O campo ao vivo é interpolado (IDW) entre 132 pontos de grade (15° × 30°) e 50 cidades; serve para visão global, não para previsão local fina.
+- O Open-Meteo é gratuito para uso não comercial dentro de limites razoáveis. A coleta centralizada já está implementada: os visitantes não gastam a cota da API.
 
 ## Licença
 

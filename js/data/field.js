@@ -3,13 +3,16 @@
 // Linha 0 = latitude +90 − step/2 (norte), coluna 0 = longitude −180 + step/2.
 import { angularDistance, windToUV, wrapLon } from '../core/geo.js';
 
-export const FIELD_KEYS = ['temp', 'rh', 'precip', 'cloud', 'u', 'v'];
+export const FIELD_KEYS = ['temp', 'rh', 'precip', 'cloud', 'u', 'v', 'windGust', 'pressure', 'feelsLike'];
 
 export function createField(step) {
   const w = Math.round(360 / step);
   const h = Math.round(180 / step);
   const field = { step, w, h };
-  for (const k of FIELD_KEYS) field[k] = new Float32Array(w * h);
+  for (const k of FIELD_KEYS) {
+    field[k] = new Float32Array(w * h);
+    if (['windGust', 'pressure', 'feelsLike'].includes(k)) field[k].fill(NaN);
+  }
   return field;
 }
 
@@ -49,7 +52,7 @@ export function fieldFromPoints(points, { step, radiusDeg, power }) {
     for (let c = 0; c < field.w; c++) {
       const { lat, lon } = cellCenter(field, r, c);
       const acc = Object.fromEntries(keys.map((k) => [k, 0]));
-      let wsum = 0;
+      const weights = Object.fromEntries(keys.map((k) => [k, 0]));
       let nearest = null, nearestD = Infinity;
       for (const p of pts) {
         // Pré-filtro barato por latitude antes do cálculo esférico.
@@ -58,16 +61,19 @@ export function fieldFromPoints(points, { step, radiusDeg, power }) {
         if (d < nearestD) { nearestD = d; nearest = p; }
         if (d > radiusDeg) continue;
         const wgt = 1 / Math.pow(Math.max(d, 0.25), power);
-        for (const k of keys) acc[k] += p[k] * wgt;
-        wsum += wgt;
+        for (const k of keys) {
+          if (!Number.isFinite(p[k])) continue;
+          acc[k] += p[k] * wgt;
+          weights[k] += wgt;
+        }
       }
       const i = r * field.w + c;
-      if (wsum > 0) {
-        for (const k of keys) field[k][i] = acc[k] / wsum;
-      } else {
-        // Sem vizinhos no raio: usa o ponto mais próximo de toda a lista.
-        const p = nearest || nearestOverall(pts, lat, lon);
-        for (const k of keys) field[k][i] = p ? p[k] : 0;
+      for (const k of keys) {
+        if (weights[k] > 0) field[k][i] = acc[k] / weights[k];
+        else {
+          const p = nearest || nearestOverall(pts, lat, lon);
+          field[k][i] = Number.isFinite(p?.[k]) ? p[k] : NaN;
+        }
       }
     }
   }

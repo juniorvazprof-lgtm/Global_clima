@@ -5,16 +5,18 @@ export const CONFIG = {
   fieldStep: 2,
 
   // Pontos consultados na API ao vivo (além das cidades).
-  liveGrid: { latStep: 10, lonStep: 15, latMax: 80 },
+  // 132 pontos + 50 cidades × 48 coletas/dia = 8.736 locais/dia.
+  liveGrid: { latStep: 15, lonStep: 30, latMax: 75 },
 
   // Quantas coordenadas por requisição ao Open-Meteo (limita o tamanho da URL).
-  batchSize: 100,
+  batchSize: 64,
 
   // Atualização automática (ms). O Open-Meteo atualiza "current" a cada 15 min.
   refreshMs: 30 * 60 * 1000,
 
-  // Tempo de vida do cache local (ms).
-  cacheTtlMs: 25 * 60 * 1000,
+  // Única fonte de condições reais para o navegador.
+  snapshotUrl: 'data/latest.json',
+  staleAfterMs: 90 * 60 * 1000,
 
   // Raio de influência do interpolador IDW (graus) e expoente.
   idw: { radiusDeg: 25, power: 2 },
@@ -29,7 +31,9 @@ export const CONFIG = {
       'wind_speed_10m',
       'wind_direction_10m',
       'weather_code',
-      'is_day',
+      'wind_gusts_10m',
+      'pressure_msl',
+      'apparent_temperature',
     ],
   },
 

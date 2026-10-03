@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Globo 3D com condições meteorológicas atuais a partir de dados públicos (Open-Meteo).">
+<meta name="theme-color" content="#070b12">
+<!--app:start-->
+<title>Globo do Clima</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<!--app:head-end-->
+</head>
+<body>
+<!--app:body-start-->
+<div class="app" id="app">
+  <div class="globe" id="globe" aria-label="Globo terrestre interativo. Arraste para girar, use dois dedos ou a roda do mouse para aproximar, toque para ler o tempo de um ponto." role="img"></div>
+
+  <header class="bar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <h1>Globo do Clima</h1>
+    </div>
+    <button class="status" id="status" type="button" aria-live="polite">
+      <span class="status-dot"></span><span class="status-text">Carregando…</span>
+    </button>
+  </header>
+
+  <section class="sheet" aria-label="Painel de dados">
+    <article class="readout" id="readout">
+      <p class="hint">Toque em qualquer ponto do globo para ler o tempo ali.</p>
+    </article>
+
+    <div class="group">
+      <h2 class="label">Campo no globo</h2>
+      <div class="segmented" role="radiogroup" aria-label="Campo no globo" id="field-select">
+        <button type="button" role="radio" id="field-temp" data-key="temp" aria-checked="true">Temperatura</button>
+        <button type="button" role="radio" id="field-rh" data-key="rh" aria-checked="false">Umidade</button>
+        <button type="button" role="radio" id="field-precip" data-key="precip" aria-checked="false">Chuva</button>
+        <button type="button" role="radio" id="field-none" data-key="none" aria-checked="false">Nenhum</button>
+      </div>
+      <div class="legend" id="legend">
+        <div class="legend-bar" id="legend-bar"></div>
+        <div class="legend-ticks" id="legend-ticks"></div>
+        <p class="legend-label" id="legend-label"></p>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2 class="label">Camadas</h2>
+      <div class="toggles">
+        <label class="toggle"><input type="checkbox" id="layer-wind" checked><span>Vento</span></label>
+        <label class="toggle"><input type="checkbox" id="layer-clouds" checked><span>Nuvens</span></label>
+        <label class="toggle"><input type="checkbox" id="layer-cities" checked><span>Cidades</span></label>
+        <label class="toggle"><input type="checkbox" id="layer-sun" checked><span>Dia e noite</span></label>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2 class="label">Planeta agora</h2>
+      <dl class="stats" id="stats">
+        <div><dt>Média global</dt><dd id="stat-mean">—</dd></div>
+        <div><dt>Mínima</dt><dd id="stat-min">—</dd></div>
+        <div><dt>Máxima</dt><dd id="stat-max">—</dd></div>
+        <div><dt>Nebulosidade</dt><dd id="stat-cloud">—</dd></div>
+      </dl>
+    </div>
+
+    <div class="group source">
+      <h2 class="label">Fonte dos dados</h2>
+      <div class="source-row">
+        <select id="mode" aria-label="Fonte dos dados">
+          <option value="auto">Automático</option>
+          <option value="live">Ao vivo (Open-Meteo)</option>
+          <option value="demo">Demonstração</option>
+        </select>
+        <button type="button" class="btn" id="refresh">Atualizar</button>
+      </div>
+      <p class="note" id="source-note"></p>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script type="module" src="js/main.js"></script>
+<!--app:body-end-->
+</body>
+</html>
